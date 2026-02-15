@@ -1,0 +1,14 @@
+{
+  "images/1.png": {
+    "category": "knife",
+    "intention": "I want to slice this orange to have some fresh pieces with my tea."
+  },
+  "images/2.png": {
+    "category": "whiteboard",
+    "intention": "I want to visualize the workflow for our current task and get input from everyone in the room."
+  },
+  "images/3.png": {
+    "category": "apple watch",
+    "intention": "I’m about to leave the house and I need to make sure I won’t lose track of time while I’m out."
+  }
+}

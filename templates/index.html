@@ -1,0 +1,299 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Bbox Annotation UI</title>
+    <style>
+      body {
+        font-family: Arial, sans-serif;
+        margin: 20px;
+        color: #222;
+      }
+      .row {
+        display: flex;
+        gap: 24px;
+      }
+      .panel {
+        flex: 1;
+      }
+      img {
+        max-width: 100%;
+        height: auto;
+        border: 1px solid #ddd;
+      }
+      textarea {
+        width: 100%;
+        min-height: 160px;
+        font-size: 14px;
+      }
+      .controls {
+        margin-top: 12px;
+        display: flex;
+        gap: 8px;
+      }
+      .meta {
+        margin: 8px 0 16px;
+      }
+      .label {
+        font-weight: bold;
+      }
+      .status {
+        margin-left: 12px;
+        color: #0a6;
+      }
+      .examples {
+        margin-bottom: 16px;
+      }
+      .example-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+        gap: 12px;
+        margin-top: 8px;
+      }
+      .example-card {
+        border: 1px solid #ddd;
+        padding: 8px;
+        border-radius: 6px;
+      }
+      .example-card img {
+        width: 100%;
+        height: auto;
+      }
+      .example-meta {
+        margin-top: 6px;
+        font-size: 13px;
+      }
+      .example-meta .label {
+        font-weight: bold;
+      }
+      .guidelines {
+        border: 1px solid #ddd;
+        padding: 10px;
+        border-radius: 6px;
+        margin-bottom: 16px;
+        background: #fafafa;
+      }
+      .guidelines-text {
+        margin-top: 6px;
+        font-size: 13px;
+        line-height: 1.5;
+      }
+      .group-select {
+        margin-bottom: 12px;
+      }
+      .group-buttons {
+        display: flex;
+        gap: 8px;
+        margin-top: 6px;
+      }
+      .group-buttons button.active {
+        background: #0a6;
+        color: #fff;
+      }
+      .group-meta {
+        margin-top: 6px;
+        font-size: 13px;
+        color: #444;
+      }
+      #group-hint {
+        color: #a00;
+      }
+    </style>
+  </head>
+  <body>
+    <h2>Bbox Annotation UI</h2>
+    <div class="guidelines">
+      <div class="label">Intention Description Annotation Guidelines</div>
+      <div class="guidelines-text">
+        <div><span class="label">Goal:</span> Given the green boxed target object and the scene context, write a natural-language intention that explains why someone would want this object. The intention must uniquely point to the boxed object.</div>
+        <div class="label">Requirements:</div>
+        <div>- Do NOT mention the original category name (or its direct synonyms).</div>
+        <div>- The intention must be grounded in the given scene.</div>
+        <div>- It must be specific and uniquely identify the boxed object.</div>
+        <div>- Other objects in the image should not satisfy the intention.</div>
+        <div class="label">Tips:</div>
+        <div>- You may describe function, appearance, or location, but avoid category words.</div>
+        <div>- Write a complete sentence like a real user intention.</div>
+      </div>
+    </div>
+    <div class="examples">
+      <div class="label">Examples</div>
+      <div class="example-grid" id="examples"></div>
+    </div>
+    <div class="group-select">
+      <div class="label">Select Group</div>
+      <div class="group-buttons" id="groups"></div>
+      <div class="group-meta" id="group-meta"></div>
+    </div>
+    <div class="meta">
+      <span id="progress">0 / 0</span>
+      <span id="counts">Annotated: 0, Remaining: 0</span>
+      <span class="status" id="status"></span>
+    </div>
+    <div class="meta" id="group-hint">Please select a group to start.</div>
+    <div class="row" id="main-panel" hidden>
+      <div class="panel">
+        <img id="image" alt="sample" />
+        <div class="meta">
+          <span class="label">Category:</span>
+          <span id="category">-</span>
+        </div>
+      </div>
+      <div class="panel">
+        <div class="label">Intention</div>
+        <textarea id="text" placeholder="Enter intention here..."></textarea>
+        <div class="controls">
+          <button id="prev">Prev</button>
+          <button id="save">Save</button>
+          <button id="next">Next</button>
+        </div>
+      </div>
+    </div>
+
+    <script>
+      let total = 0;
+      let index = 0;
+      let groupId = null;
+
+      async function fetchTotals() {
+        if (!groupId) {
+          return;
+        }
+        const res = await fetch(`/api/samples?group=${groupId}`);
+        const data = await res.json();
+        total = data.total || 0;
+        const annotated = data.annotated || 0;
+        const remaining = Math.max(total - annotated, 0);
+        document.getElementById("counts").textContent =
+          `Annotated: ${annotated}, Remaining: ${remaining}`;
+        updateProgress();
+      }
+
+      async function loadExamples() {
+        const res = await fetch("/api/examples");
+        if (!res.ok) {
+          return;
+        }
+        const data = await res.json();
+        const examples = data.examples || [];
+        const container = document.getElementById("examples");
+        container.innerHTML = "";
+        for (const ex of examples) {
+          const card = document.createElement("div");
+          card.className = "example-card";
+          card.innerHTML = `
+            <img src="${ex.image_url}" alt="example" />
+            <div class="example-meta">
+              <div><span class="label">Category:</span> ${ex.category || "-"}</div>
+              <div><span class="label">Intention:</span> ${ex.intention || "-"}</div>
+            </div>
+          `;
+          container.appendChild(card);
+        }
+      }
+
+      function updateProgress() {
+        document.getElementById("progress").textContent = `${index + 1} / ${total}`;
+      }
+
+      function setStatus(msg) {
+        const el = document.getElementById("status");
+        el.textContent = msg;
+        if (msg) {
+          setTimeout(() => {
+            el.textContent = "";
+          }, 1200);
+        }
+      }
+
+      async function loadSample(idx) {
+        if (!groupId) {
+          return;
+        }
+        const res = await fetch(`/api/sample/${idx}?group=${groupId}`);
+        if (!res.ok) {
+          return;
+        }
+        const data = await res.json();
+        index = data.index;
+        document.getElementById("image").src = data.image_url;
+        document.getElementById("category").textContent = data.category || "-";
+        document.getElementById("text").value = data.text || "";
+        updateProgress();
+      }
+
+      async function saveSample() {
+        if (!groupId) {
+          return;
+        }
+        const text = document.getElementById("text").value || "";
+        await fetch(`/api/sample/${index}/save?group=${groupId}`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ text }),
+        });
+        await fetchTotals();
+        setStatus("Saved");
+      }
+
+      async function loadGroups() {
+        const res = await fetch("/api/groups");
+        if (!res.ok) {
+          return;
+        }
+        const data = await res.json();
+        const groups = data.groups || {};
+        const container = document.getElementById("groups");
+        container.innerHTML = "";
+        const gids = Object.keys(groups);
+        for (const gid of gids) {
+          const info = groups[gid];
+          const btn = document.createElement("button");
+          btn.textContent = `Group ${gid} (${info.total})`;
+          btn.addEventListener("click", async () => {
+            groupId = gid;
+            for (const b of container.querySelectorAll("button")) {
+              b.classList.remove("active");
+            }
+            btn.classList.add("active");
+            document.getElementById("group-meta").textContent =
+              `Selected Group ${gid}`;
+            document.getElementById("group-hint").textContent = "";
+            document.getElementById("main-panel").hidden = false;
+            index = 0;
+            await fetchTotals();
+            if (total > 0) {
+              loadSample(0);
+            }
+          });
+          container.appendChild(btn);
+        }
+        // Do not auto-select a group.
+      }
+
+      document.getElementById("prev").addEventListener("click", async () => {
+        if (index > 0) {
+          await saveSample();
+          loadSample(index - 1);
+        }
+      });
+
+      document.getElementById("next").addEventListener("click", async () => {
+        if (index < total - 1) {
+          await saveSample();
+          loadSample(index + 1);
+        }
+      });
+
+      document.getElementById("save").addEventListener("click", async () => {
+        await saveSample();
+      });
+
+      (async () => {
+        await loadExamples();
+        await loadGroups();
+      })();
+    </script>
+  </body>
+</html>

@@ -1,62 +1,31 @@
 # Bbox Annotation UI
 
-A local web tool for adding text annotations to image + bbox + label datasets.
+## Quick Start
 
-## Input Data Structure
+1) Download the dataset zip:
+https://drive.google.com/file/d/1ACjr7LFHPMvL8t6WZlAxZP8p-SjIwm3w/view?usp=drive_link
 
-```
-data_dir/
-  <episode_id>.png
-  <episode_id>.json
-  ...
-```
-
-- Place image files (`.png` / `.jpg` / `.jpeg` / `.webp`) in the directory.
-- If a JSON file with the same name exists, bbox and label info will be loaded. JSON files are optional.
-
-### JSON File Format
-
-```json
-{
-  "bbox": [x1, y1, x2, y2], # optional
-  "label": "cat"
-}
+2) Unzip:
+```bash
+unzip merged_200_gt_only.zip -d /path/to/data
 ```
 
-| Field   | Type                               | Required | Description                                                                                               |
-| ------- | ---------------------------------- | -------- | --------------------------------------------------------------------------------------------------------- |
-| `bbox`  | `[number, number, number, number]` | No       | Top-left (x1, y1) and bottom-right (x2, y2) pixel coordinates. Displayed as a red rectangle on the image. |
-| `label` | `string`                           | No       | Label string. Displayed below the image.                                                                  |
-
-## Output File
-
-Annotations are saved to the JSON file specified by `--output-file`.
-
-```json
-{
-  "<episode_id>": "annotation text",
-  "<episode_id>": "annotation text"
-}
-```
-
-- Keys are image filenames without extensions (e.g., `image1.png` -> `"image1"`).
-- If the output file already exists, it will be loaded so you can resume from where you left off.
-
-## Usage
-
+3) Run:
 ```bash
 uv venv
 source .venv/bin/activate
 uv pip install -r requirements.txt
-python server.py --data-dir /path/to/data --output-file /path/to/output.json
+python server.py \
+  --data-dir /path/to/data \
+  --output-file /path/to/hairong-bbox-annotation-ui/intention_output.json \
+  --category-file /path/to/merged_200_gt_only/categories.json \
+  --group-file /path/to/merged_200_gt_only/groups.json
 ```
 
-Open http://localhost:5000 in your browser.
+4) Open:
+http://localhost:5000
+You will see the annotation guidelines and examples on the page.
 
-### Options
-
-| Argument        | Required | Default | Description                             |
-| --------------- | -------- | ------- | --------------------------------------- |
-| `--data-dir`    | Yes      | -       | Directory containing image + JSON pairs |
-| `--output-file` | Yes      | -       | Output JSON file for annotation results |
-| `--port`        | No       | `5000`  | Server port number                      |
+5) Select your assigned Group and annotate only that group.
+Rename the output file as `yourname_group1.json` or `yourname_group2.json` and submit to:
+https://drive.google.com/drive/folders/1yF46jRkayuar_L1O79kaEFqWv0z62Iq8?usp=drive_link
