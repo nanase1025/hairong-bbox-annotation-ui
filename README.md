@@ -3,11 +3,11 @@
 ## Quick Start
 
 1) Download the dataset zip:
-https://drive.google.com/file/d/1ACjr7LFHPMvL8t6WZlAxZP8p-SjIwm3w/view?usp=drive_link
+https://drive.google.com/file/d/1yNFahFV5pliA88QwCIxdYMp_K5yFNitX/view?usp=drive_link
 
 2) Unzip:
 ```bash
-unzip merged_200_gt_only.zip -d /path/to/data
+unzip human200.zip -d /path/to/data
 ```
 
 3) Run:
@@ -15,15 +15,15 @@ unzip merged_200_gt_only.zip -d /path/to/data
 uv venv
 source .venv/bin/activate
 uv pip install -r requirements.txt
-python server.py \
+python server_bbox.py \
   --data-dir /path/to/data \
-  --output-file /path/to/hairong-bbox-annotation-ui/intention_output.json \
-  --category-file /path/to/merged_200_gt_only/categories.json \
-  --group-file /path/to/merged_200_gt_only/groups.json
+  --intention-file /path/to/data/intentions.json \
+  --group-file /path/to/data/groups.json \
+  --output-file /path/to/hairong-bbox-annotation-ui/bbox_output.json
 ```
 
 4) Open:
-http://localhost:5000
+http://localhost:5001
 You will see the annotation guidelines and examples on the page.
 
 5) Select your assigned Group and annotate only that group.

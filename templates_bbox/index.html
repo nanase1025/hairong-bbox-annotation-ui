@@ -1,0 +1,291 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Intention BBox Annotation</title>
+    <style>
+      body {
+        font-family: Arial, sans-serif;
+        margin: 20px;
+        color: #222;
+      }
+      .meta {
+        margin: 8px 0 16px;
+      }
+      .label {
+        font-weight: bold;
+      }
+      .status {
+        margin-left: 12px;
+        color: #0a6;
+      }
+      .group-select {
+        margin-bottom: 12px;
+      }
+      .group-buttons {
+        display: flex;
+        gap: 8px;
+        margin-top: 6px;
+      }
+      .group-buttons button.active {
+        background: #0a6;
+        color: #fff;
+      }
+      .group-meta {
+        margin-top: 6px;
+        font-size: 13px;
+        color: #444;
+      }
+      #group-hint {
+        color: #a00;
+      }
+      .row {
+        display: flex;
+        gap: 24px;
+      }
+      .panel {
+        flex: 1;
+      }
+      #canvas-wrap {
+        border: 1px solid #ddd;
+        display: inline-block;
+        max-width: 100%;
+      }
+      canvas {
+        display: block;
+        max-width: 100%;
+        height: auto;
+      }
+      textarea {
+        width: 100%;
+        min-height: 120px;
+        font-size: 14px;
+      }
+      .controls {
+        margin-top: 12px;
+        display: flex;
+        gap: 8px;
+      }
+      .coords {
+        margin-top: 8px;
+        font-size: 13px;
+      }
+    </style>
+  </head>
+  <body>
+    <h2>Intention BBox Annotation</h2>
+    <div class="group-select">
+      <div class="label">Select Group</div>
+      <div class="group-buttons" id="groups"></div>
+      <div class="group-meta" id="group-meta"></div>
+    </div>
+    <div class="meta">
+      <span id="progress">0 / 0</span>
+      <span id="counts">Annotated: 0, Remaining: 0</span>
+      <span class="status" id="status"></span>
+    </div>
+    <div class="meta" id="group-hint">Please select a group to start.</div>
+
+    <div class="row" id="main-panel" hidden>
+      <div class="panel">
+        <div id="canvas-wrap">
+          <canvas id="canvas"></canvas>
+        </div>
+        <div class="coords">
+          <span class="label">BBox:</span>
+          <span id="bbox-text">-</span>
+        </div>
+      </div>
+      <div class="panel">
+        <div class="label">Intention Description</div>
+        <textarea id="intention" readonly></textarea>
+        <div class="controls">
+          <button id="prev">Prev</button>
+          <button id="clear">Clear</button>
+          <button id="save">Save</button>
+          <button id="next">Next</button>
+        </div>
+      </div>
+    </div>
+
+    <script>
+      let total = 0;
+      let index = 0;
+      let groupId = null;
+      let currentImage = null;
+      let currentBbox = null;
+      let startPoint = null;
+
+      const canvas = document.getElementById("canvas");
+      const ctx = canvas.getContext("2d");
+
+      async function fetchTotals() {
+        if (!groupId) {
+          return;
+        }
+        const res = await fetch(`/api/samples?group=${groupId}`);
+        const data = await res.json();
+        total = data.total || 0;
+        const annotated = data.annotated || 0;
+        const remaining = Math.max(total - annotated, 0);
+        document.getElementById("counts").textContent =
+          `Annotated: ${annotated}, Remaining: ${remaining}`;
+        updateProgress();
+      }
+
+      function updateProgress() {
+        document.getElementById("progress").textContent = `${index + 1} / ${total}`;
+      }
+
+      function setStatus(msg) {
+        const el = document.getElementById("status");
+        el.textContent = msg;
+        if (msg) {
+          setTimeout(() => {
+            el.textContent = "";
+          }, 1200);
+        }
+      }
+
+      function draw() {
+        if (!currentImage) return;
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+        ctx.drawImage(currentImage, 0, 0);
+        if (currentBbox) {
+          const [x1, y1, x2, y2] = currentBbox;
+          ctx.strokeStyle = "green";
+          ctx.lineWidth = 3;
+          ctx.strokeRect(x1, y1, x2 - x1, y2 - y1);
+        }
+      }
+
+      function setBboxText() {
+        if (!currentBbox) {
+          document.getElementById("bbox-text").textContent = "-";
+          return;
+        }
+        const [x1, y1, x2, y2] = currentBbox.map((v) => Math.round(v));
+        document.getElementById("bbox-text").textContent = `${x1}, ${y1}, ${x2}, ${y2}`;
+      }
+
+      async function loadSample(idx) {
+        if (!groupId) return;
+        const res = await fetch(`/api/sample/${idx}?group=${groupId}`);
+        if (!res.ok) return;
+        const data = await res.json();
+        index = data.index;
+        currentBbox = data.bbox || null;
+        document.getElementById("intention").value = data.intention || "";
+
+        currentImage = new Image();
+        currentImage.onload = () => {
+          canvas.width = currentImage.naturalWidth;
+          canvas.height = currentImage.naturalHeight;
+          draw();
+          setBboxText();
+        };
+        currentImage.src = data.image_url;
+        updateProgress();
+      }
+
+      async function saveSample() {
+        if (!groupId) return;
+        await fetch(`/api/sample/${index}/save?group=${groupId}`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ bbox: currentBbox }),
+        });
+        await fetchTotals();
+        setStatus("Saved");
+      }
+
+      function clearBbox() {
+        currentBbox = null;
+        startPoint = null;
+        draw();
+        setBboxText();
+      }
+
+      canvas.addEventListener("click", (evt) => {
+        if (!currentImage) return;
+        const rect = canvas.getBoundingClientRect();
+        const scaleX = canvas.width / rect.width;
+        const scaleY = canvas.height / rect.height;
+        const x = (evt.clientX - rect.left) * scaleX;
+        const y = (evt.clientY - rect.top) * scaleY;
+        if (!startPoint) {
+          startPoint = [x, y];
+          return;
+        }
+        const [x0, y0] = startPoint;
+        const x1 = Math.min(x0, x);
+        const y1 = Math.min(y0, y);
+        const x2 = Math.max(x0, x);
+        const y2 = Math.max(y0, y);
+        currentBbox = [x1, y1, x2, y2];
+        startPoint = null;
+        draw();
+        setBboxText();
+      });
+
+      async function loadGroups() {
+        const res = await fetch("/api/groups");
+        if (!res.ok) return;
+        const data = await res.json();
+        const groups = data.groups || {};
+        const container = document.getElementById("groups");
+        container.innerHTML = "";
+        const gids = Object.keys(groups);
+        for (const gid of gids) {
+          const info = groups[gid];
+          const btn = document.createElement("button");
+          btn.textContent = `Group ${gid} (${info.total})`;
+          btn.addEventListener("click", async () => {
+            groupId = gid;
+            for (const b of container.querySelectorAll("button")) {
+              b.classList.remove("active");
+            }
+            btn.classList.add("active");
+            document.getElementById("group-meta").textContent =
+              `Selected Group ${gid}`;
+            document.getElementById("group-hint").textContent = "";
+            document.getElementById("main-panel").hidden = false;
+            index = 0;
+            await fetchTotals();
+            if (total > 0) {
+              loadSample(0);
+            }
+          });
+          container.appendChild(btn);
+        }
+      }
+
+      document.getElementById("prev").addEventListener("click", async () => {
+        if (index > 0) {
+          await saveSample();
+          loadSample(index - 1);
+        }
+      });
+
+      document.getElementById("next").addEventListener("click", async () => {
+        if (index < total - 1) {
+          await saveSample();
+          loadSample(index + 1);
+        }
+      });
+
+      document.getElementById("save").addEventListener("click", async () => {
+        await saveSample();
+      });
+
+      document.getElementById("clear").addEventListener("click", () => {
+        clearBbox();
+      });
+
+      (async () => {
+        await loadGroups();
+      })();
+    </script>
+  </body>
+</html>
